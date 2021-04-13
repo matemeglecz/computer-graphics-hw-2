@@ -110,12 +110,81 @@ struct Sphere : public Intersectable {
 	}
 };
 
+struct Dodekaedron : public Intersectable {
+	vec3 v[20] = { vec3(0, 0.618, 1.618), vec3(0, -0.618, 1.618), vec3(0, -0.618, -1.618), vec3(0, 0.618, -1.618),
+						vec3(1.618, 0, 0.618), vec3(-1.618, 0, 0.618), vec3(-1.618, 0, -0.618), vec3(1.618, 0, -0.618),
+						vec3(0.618, 1.618, 0), vec3(-0.618, 1.618, 0), vec3(-0.618, -1.618, 0), vec3(0.618, -1.618, 0),
+						vec3(1, 1, 1), vec3(-1, 1, 1), vec3(-1, -1, 1), vec3(1, -1, 1),
+						vec3(1, -1, -1), vec3(1, 1, -1), vec3(-1, 1, -1), vec3(-1, -1, -1) };
+
+	vec3 f[12][5] = { {v[0], v[1], v[15], v[4], v[12]}, {v[0], v[12], v[8], v[9], v[13]}, {v[0], v[13], v[5], v[14], v[1]}, {v[1], v[14], v[10], v[11], v[15]},
+					{v[2], v[3], v[17], v[7], v[16]}, {v[2], v[16], v[11], v[10], v[19]}, {v[2], v[19], v[6], v[18], v[3]}, {v[18], v[9], v[8], v[17], v[3]},
+					{v[15], v[11], v[16], v[7], v[4]}, {v[4], v[7], v[17], v[8], v[12]}, {v[13], v[9], v[18], v[6], v[5]}, {v[5], v[6], v[19], v[10], v[14]}
+					}; 
+
+	Dodekaedron(Material* _material) {
+		material = _material;
+	}
+
+	Hit intersect(const Ray& ray) {
+		Hit hit;
+	
+		for (int i = 0; i < 12; i++) {
+			vec3 plainNormal = normalize(cross(f[i][1] - f[i][0], f[i][2] - f[i][0]));
+			float t = dot((f[i][0] - ray.start), plainNormal) / dot(ray.dir, plainNormal);
+			if (t <= 0) continue;
+			vec3 hitPoint = ray.start + ray.dir * t;
+			bool inside = true;
+			vec3 middlePoint = vec3(0, 0, 0);
+			for (int l = 0; l < 5; l++) {
+				middlePoint = middlePoint + f[i][l];
+			}
+			middlePoint = middlePoint / 5;
+			for (int j = 0; j < 5; j++) {
+				vec3 triangleV[3] = { f[i][j] , f[i][(j + 1) % 5] ,  middlePoint};
+				for (int k = 0; k < 3 && inside; k++) {
+					plainNormal = cross(triangleV[(1+k)%3] - triangleV[0+k], triangleV[(2+k)%3] - triangleV[0+k]);
+					if (!(dot(cross(triangleV[(1 + k) % 3] - triangleV[0 + k], hitPoint - triangleV[0 + k]), plainNormal) > 0)) inside = false;
+				}
+				if (inside && (hit.t>t || hit.t<0)) {
+					hit.position = hitPoint;
+					hit.normal = plainNormal;
+					hit.t = t;
+					//vec3 n(0.17f, 0.35f, 1.5f), kappa(3.1f, 2.7f, 1.9f);
+					vec3 n(0, 0, 0), kappa(1, 1, 1);
+					hit.material = new ReflectiveMaterial(n, kappa);
+					for (int n = 0; n < 5; n++) {
+						vec3 side = f[i][n] - f[i][(n + 1) % 5];
+						vec3 point = f[i][n] - hit.position;
+						float cosAlpha = dot(normalize(side), normalize(point));
+						//float alfa = acosf(cosAlpha);
+						float dist = sqrt(1 - pow(cosAlpha, 2)) * length(point);
+						//float dist = sinf(alfa) * length(hit.position);
+						//printf("%lf", dist);
+						if (dist < 0.1f) {
+							hit.material = this->material;
+							break;
+						}
+					}
+
+					//hit.material = this->material;
+					break;
+				}
+				inside = true;
+			}
+
+		}
+		return hit;
+
+	}
+};
+
 struct MiddleObject : public Intersectable {
 	float sphereRadius = 0.3f;
 	vec3 center = vec3(0, 0, 0);
-	float a = 10;
-	float b = 10;
-	float c = 10;
+	float a = 15;
+	float b = 5;
+	float c = 7;
 	
 	MiddleObject(Material* _material) {
 		material = _material;
@@ -126,7 +195,7 @@ struct MiddleObject : public Intersectable {
 		//vec3 dist = ray.start - center;
 		float eA = a * pow(ray.dir.x, 2) + b * pow(ray.dir.y, 2);
 		float eB = a * 2 * ray.start.x * ray.dir.x + b * 2 * ray.start.y * ray.dir.y - c * ray.dir.z;
-		float eC = a * pow(ray.start.x, 2) + b * pow(ray.start.y, 2) - c * ray.start.z - 1;
+		float eC = a * pow(ray.start.x, 2) + b * pow(ray.start.y, 2) - c * ray.start.z;
 
 		float discr = pow(eB, 2) - 4 * eA * eC;
 
@@ -194,7 +263,7 @@ struct Light {
 	}
 };
 
-float rnd() { return (float)rand() / RAND_MAX; }
+//float rnd() { return (float)rand() / RAND_MAX; }
 
 const float epsilon = 0.0001f;
 
@@ -205,24 +274,31 @@ class Scene {
 	vec3 La;
 public:
 	void build() {
-		vec3 eye = vec3(0, 0, 2), vup = vec3(0, 1, 0), lookat = vec3(0, 0, 0);
-		float fov = 45 * M_PI / 180;
+		vec3 eye = vec3(0, 0, 1), vup = vec3(0, 1, 0), lookat = vec3(0, 0, 0);
+		//vec3 eye = vec3(0, 0, 10), vup = vec3(0, 10, 0), lookat = vec3(0, 0, 0);
+		float fov = 60 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
-		La = vec3(0.4f, 0.4f, 0.4f);
-		//La = vec3(0.1f, 0.1f, 0.1f);
+		//La = vec3(0.4f, 0.4f, 0.4f);
+		La = vec3(0.01f, 0.01f, 0.01f);
+		//La = vec3(0.0f, 0.0f, 0.0f);
+		//vec3 lightPoint(0.9, -0.9, 0.9), Le(2, 2, 2);
 		vec3 lightPoint(1, -1, 1), Le(2, 2, 2);
 		lights.push_back(new Light(lightPoint, Le));
 
-		vec3 kd(0.17f, 0.35f, 1.5f), ks(3.1f, 2.7f, 1.9f);
+		vec3 kd(0.2f, 0.3f, 1.5f), ks(3.1f, 2.7f, 1.9f);
 		vec3 n(0.17f, 0.35f, 1.5f), kappa(3.1f, 2.7f, 1.9f);
 		//Material* material = new Material(kd, ks, 100);
 		RoughMaterial* materialRough = new RoughMaterial(kd, ks, 100);
+		RoughMaterial* materialRough2 = new RoughMaterial(kd*2, ks, 100);
 		ReflectiveMaterial* gold = new ReflectiveMaterial(n, kappa);
 		//for (int i = 0; i < 500; i++)
 			//objects.push_back(new Sphere(vec3( 0,  0,  0), 0.1f, gold));
+			//objects.push_back(new Sphere(vec3( 0,  0,  0), 2, materialRough));
+			//objects.push_back(new Sphere(vec3( 0.3,  0.3,  0.3), 0.1f, materialRough));
 			objects.push_back(new MiddleObject(gold));
-			objects.push_back(new Sphere(vec3( -0.5,  0.5,  -0.5), 0.1f, materialRough));
+			//objects.push_back(new Sphere(vec3( -0.5,  0.5,  -0.5), 0.1f, materialRough2));
+			objects.push_back(new Dodekaedron(materialRough));
 	}
 
 	void render(std::vector<vec4>& image) {
@@ -253,6 +329,7 @@ public:
 	vec3 trace(Ray ray, int depth = 0) {
 		if (depth > 5) return La;
 		Hit hit = firstIntersect(ray);
+		//printf("%lf %lf %lf\n", hit.position.x, hit.position.y, hit.position.z);
 		if (hit.t < 0) return La;
 		vec3 outRadiance = vec3(0, 0, 0);
 
@@ -261,11 +338,12 @@ public:
 			//vec3 outRadiance ;
 			for (Light* light : lights) {
 				vec3 direction = normalize(hit.position - light->point);
+				//vec3 direction = normalize(light->point-hit.position  );
 				double d = length(hit.position - light->point);
-				Ray shadowRay(hit.position + hit.normal * epsilon, direction);
-				float cosTheta = dot(hit.normal, direction);
+				Ray shadowRay(hit.position + -hit.normal * epsilon, direction);
+				float cosTheta = dot(hit.normal, -direction);
 				if (cosTheta > 0 && !shadowIntersect(shadowRay)) {	// shadow computation
-					//outRadiance = light->Le/(d*d) * hit.material->kd * cosTheta;
+					//outRadiance = light->Le/(d*d) * hit.material->kd * cosTheta;				
 					outRadiance = outRadiance + light->Le / pow(d, 2) * hit.material->kd * cosTheta;
 					vec3 halfway = normalize(-ray.dir + direction);
 					float cosDelta = dot(hit.normal, halfway);
@@ -280,6 +358,7 @@ public:
 			vec3 F= hit.material->F0 + (one - hit.material->F0) * pow(1 - cosa, 5);
 			outRadiance = outRadiance + trace(Ray(hit.position + hit.normal * epsilon, reflectedDir), depth+1) * F;
 		}
+		
 		return outRadiance;
 	}
 
