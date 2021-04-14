@@ -122,6 +122,7 @@ struct Dodekaedron : public Intersectable {
 					{v[2], v[3], v[17], v[7], v[16]}, {v[2], v[16], v[11], v[10], v[19]}, {v[2], v[19], v[6], v[18], v[3]}, {v[18], v[9], v[8], v[17], v[3]},
 					{v[15], v[11], v[16], v[7], v[4]}, {v[4], v[7], v[17], v[8], v[12]}, {v[13], v[9], v[18], v[6], v[5]}, {v[5], v[6], v[19], v[10], v[14]}
 					}; 
+	Material* mirror = new ReflectiveMaterial(vec3(0, 0, 0), vec3(1, 1, 1), REFLECTIVE_ROTATE);
 
 	Dodekaedron(Material* _material) {
 		material = _material;
@@ -149,11 +150,12 @@ struct Dodekaedron : public Intersectable {
 				}
 				if (inside && (hit.t>t || hit.t<0)) {
 					hit.position = hitPoint;
-					hit.normal = plainNormal;
+					hit.normal = normalize(plainNormal);
 					hit.t = t;				
 					//vec3 n(0.17f, 0.35f, 1.5f), kappa(3.1f, 2.7f, 1.9f);
-					vec3 n(0, 0, 0), kappa(1, 1, 1);
-					hit.material = new ReflectiveMaterial(n, kappa, REFLECTIVE_ROTATE);
+					//vec3 n(0, 0, 0), kappa(1, 1, 1);
+					//hit.material = new ReflectiveMaterial(n, kappa, REFLECTIVE_ROTATE);
+					hit.material = mirror;
 					for (int n = 0; n < 5; n++) {
 						vec3 side = f[i][n] - f[i][(n + 1) % 5];
 						vec3 point = f[i][n] - hit.position;
@@ -183,9 +185,9 @@ struct Dodekaedron : public Intersectable {
 struct MiddleObject : public Intersectable {
 	float sphereRadius = 0.3f;
 	vec3 center = vec3(0, 0, 0);
-	float a = 6;
-	float b = 6;
-	float c = 2;
+	float a = 4;
+	float b = 4;
+	float c = 1;
 	
 	MiddleObject(Material* _material) {
 		material = _material;
@@ -195,7 +197,7 @@ struct MiddleObject : public Intersectable {
 		Hit hit;
 		//vec3 dist = ray.start - center;
 		float eA = a * pow(ray.dir.x, 2) + b * pow(ray.dir.y, 2);
-		float eB = a * 2 * ray.start.x * ray.dir.x + b * 2 * ray.start.y * ray.dir.y - c * ray.dir.z;
+		float eB = a * 2.0f * ray.start.x * ray.dir.x + b * 2.0f * ray.start.y * ray.dir.y - c * ray.dir.z;
 		float eC = a * pow(ray.start.x, 2) + b * pow(ray.start.y, 2) - c * ray.start.z;
 
 		float discr = pow(eB, 2) - 4 * eA * eC;
@@ -223,6 +225,7 @@ struct MiddleObject : public Intersectable {
 		vec3 yDer = vec3(0, 1, (2 * b * hit.position.y) / c);
 		hit.normal = cross(xDer, yDer);
 		hit.normal = normalize(hit.normal);
+
 		hit.material = material;
 		return hit;
 
@@ -275,14 +278,14 @@ class Scene {
 	vec3 La;
 public:
 	void build() {
-		vec3 eye = vec3(0, 0, 1), vup = vec3(0, 1, 0), lookat = vec3(0, 0, 0);
+		vec3 eye = vec3(0, 0, 1.3), vup = vec3(0, 1, 0), lookat = vec3(0, 0, 0);
 		//vec3 eye = vec3(0, 0, 10), vup = vec3(0, 10, 0), lookat = vec3(0, 0, 0);
-		float fov = 60 * M_PI / 180;
+		float fov = 45 * M_PI / 180;
 		camera.set(eye, lookat, vup, fov);
 
 		//La = vec3(0.4f, 0.4f, 0.4f);
 		//La = vec3(0.01f, 0.01f, 0.01f);
-		La = vec3(0.1f, 0.1f, 0.1f);
+		La = vec3(0.2f, 0.2f, 0.2f);
 		//La = vec3(0.0f, 0.0f, 0.0f);
 		//vec3 lightPoint(0.9, -0.9, 0.9), Le(2, 2, 2);
 		vec3 lightPoint(1, -1, 1), Le(2, 2, 2);
@@ -292,12 +295,13 @@ public:
 		vec3 n(0.17f, 0.35f, 1.5f), kappa(3.1f, 2.7f, 1.9f);
 		//Material* material = new Material(kd, ks, 100);
 		RoughMaterial* materialRough = new RoughMaterial(kd, ks, 100);
-		//RoughMaterial* materialRough2 = new RoughMaterial(kd*2, ks, 100);
-		ReflectiveMaterial* gold = new ReflectiveMaterial(n, kappa);
+		//RoughMaterial* materialRough2 = RoughMaterial(kd*2, ks, 100);
+		ReflectiveMaterial* gold = new ReflectiveMaterial(n, kappa, REFLECTIVE);
 		//for (int i = 0; i < 500; i++)
 			//objects.push_back(new Sphere(vec3( 0,  0,  0), 0.1f, gold));
 			//objects.push_back(new Sphere(vec3( 0,  0,  0), 2, materialRough));
 			//objects.push_back(new Sphere(vec3( 0.3,  0.3,  0.3), 0.1f, materialRough));
+			//objects.push_back(new MiddleObject(gold));
 			objects.push_back(new MiddleObject(gold));
 			//objects.push_back(new Sphere(vec3( -0.5,  0.5,  -0.5), 0.1f, materialRough2));
 			objects.push_back(new Dodekaedron(materialRough));
@@ -323,10 +327,17 @@ public:
 		return bestHit;
 	}
 
-	bool shadowIntersect(Ray ray) {	// for directional lights
-		for (Intersectable* object : objects) if (object->intersect(ray).t > 0) return true;
-		return false;
+	bool shadowIntersect(Ray ray, float t) {
+		Hit hit = firstIntersect(ray);
+		if (hit.t < t ) return false;
+		return true;
 	}
+
+	/*bool shadowIntersect(Ray ray, float dist) { //attiláé
+		Hit shadowHit = firstIntersect(ray);
+		if ((shadowHit.t < 0 || shadowHit.t > dist)) return true;
+		return false;
+	}*/
 
 	vec3 trace(Ray ray, int depth = 0) {
 		if (depth > 5) return La;
@@ -338,12 +349,15 @@ public:
 			outRadiance = hit.material->ka * La;
 			//vec3 outRadiance ;
 			for (Light* light : lights) {
-				vec3 direction = normalize(hit.position - light->point);
-				//vec3 direction = normalize(light->point-hit.position  );
-				double d = length(hit.position - light->point);
-				Ray shadowRay(hit.position + -hit.normal * epsilon, direction);
-				float cosTheta = dot(hit.normal, -direction);
-				if (cosTheta > 0 && !shadowIntersect(shadowRay)) {	// shadow computation
+				//vec3 direction = normalize(hit.position - light->point);
+				vec3 direction = normalize(light->point-hit.position);
+				//double d = length(hit.position - light->point);
+				double d = length(light->point- hit.position);
+				//Ray shadowRay(hit.position + -hit.normal * epsilon, direction);
+				Ray shadowRay(hit.position + hit.normal * epsilon, direction);
+				//float cosTheta = dot(-hit.normal, direction);
+				float cosTheta = dot(hit.normal, direction);
+				if (cosTheta > 0 && !shadowIntersect(shadowRay, d)) {	// shadow computation
 					//outRadiance = light->Le/(d*d) * hit.material->kd * cosTheta;				
 					outRadiance = outRadiance + light->Le / pow(d, 2) * hit.material->kd * cosTheta;
 					vec3 halfway = normalize(-ray.dir + direction);
@@ -360,8 +374,9 @@ public:
 			if (hit.material->type == REFLECTIVE_ROTATE) {
 				hit.position = hit.position- hit.material->middle;
 				float theta = 2 * M_PI / 5;
-				hit.position = hit.position * cosf(theta) + cross(hit.position, hit.normal) * sinf(theta) + hit.normal * dot(hit.normal, hit.position) * (1 - cosf(theta));
-				reflectedDir= reflectedDir * cosf(theta) + cross(reflectedDir, hit.normal) * sinf(theta) + hit.normal * dot(hit.normal, reflectedDir) * (1 - cosf(theta));
+				hit.position = hit.position * cos(theta) + cross(hit.position, hit.normal) * sin(theta) + hit.normal * dot(hit.normal, hit.position) * (1 - cos(theta));
+				hit.position = hit.position + hit.material->middle;
+				reflectedDir= reflectedDir * cos(theta) + cross(reflectedDir, hit.normal) * sin(theta) + hit.normal * dot(hit.normal, reflectedDir) * (1 - cos(theta));
 			}
 
 			outRadiance = outRadiance + trace(Ray(hit.position + hit.normal * epsilon, reflectedDir), depth+1) * F;
